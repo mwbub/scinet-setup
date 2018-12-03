@@ -1,0 +1,176 @@
+\documentclass[12pt]{article}
+\usepackage[margin=3cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref} 
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{textcomp}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+
+\definecolor{gray}{rgb}{0.95,0.95,0.95}
+\lstset{
+	tabsize=4,
+	backgroundcolor=\color{gray},
+	upquote=Truet,
+}
+
+\title{SciNet Setup}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+This guide is intended to assist with initial setup on the SciNet Niagara supercomputer, and to show how to use it with \texttt{galpy}. For more detailed information on using Niagara, please see the SciNet documentation: \url{https://docs.scinet.utoronto.ca/index.php/Niagara_Quickstart}.
+\section{Accessing Niagara}
+\begin{enumerate}[leftmargin=*]
+\item First, you'll need a Compute Canada account. If you don't already have one, speak with Jo about getting registered.
+\item Log in to Compute Canada at \url{https://ccdb.computecanada.ca/security/login}.
+\item Navigate to \textbf{My Account \textgreater \ Apply for a consortium account}, and apply for a SciNet account. You should be granted access within two business days.
+\item After receiving a confirmation email that your account has been granted, you may now \texttt{ssh} into the Niagara login nodes using your Compute Canada user name and password:
+\begin{lstlisting}
+$ ssh USERNAME@niagara.scinet.utoronto.ca
+\end{lstlisting}
+\item You may now add an SSH key and set up your Linux environment as usual. For further instruction, see the SciNet Documentation at \url{https://docs.scinet.utoronto.ca/index.php/SSH_keys} or the \textbf{Setup and SSH keys} section of the group server page at \url{http://astro.utoronto.ca/~bovy/group/compute_servers.html}.
+\end{enumerate}
+
+\section{Installing and Using Software}
+Many software modules, including Python and the necessary compilers to install \texttt{galpy}, are pre-installed on Niagara, however they are not accessible by default. Instead, you must explicitly load each software module that you want to use at any given time. The command to load a module is:
+\begin{lstlisting}
+$ module load <module-name>
+\end{lstlisting}
+To view a list of currently loaded modules, type:
+\begin{lstlisting}
+$ module list
+\end{lstlisting}
+To view a list of modules that are currently available to load, type:
+\begin{lstlisting}
+$ module avail
+\end{lstlisting}
+To view the full list of software installed on Niagara, type:
+\begin{lstlisting}
+$ module spider
+\end{lstlisting}
+Finally, to clear all currently loaded modules, type:
+\begin{lstlisting}
+$ module purge
+\end{lstlisting}
+Below are the step-by-step instructions for installing \texttt{galpy} for use on Niagara. For more general information on loading software, see the SciNet documentation.
+
+\subsection {Installing \texttt{galpy}}
+\begin{enumerate}[leftmargin=*]
+\item We will first set up an Anaconda virtual environment to install our own Python modules:
+\begin{lstlisting}
+$ module load python/3.6.4-anaconda5.1.0
+$ conda create -n galpyEnv python=3.6
+\end{lstlisting}
+\item Now, activate the new environment and install the Scientific Python suite:
+\begin{lstlisting}
+$ source activate galpyEnv
+$ pip install numpy, scipy, matplotlib, astropy
+\end{lstlisting}
+\item \texttt{galpy} should be installed from its source files for use with SciNet. Create a directory to hold the repository, and download the source using \texttt{git}:
+\begin{lstlisting}
+$ module load git
+$ git clone https://github.com/jobovy/galpy.git
+\end{lstlisting}
+\item Now, navigate to the repository. To install galpy, load the necessary compiler and \texttt{gsl}, then run \texttt{setup.py} in development mode:
+\begin{lstlisting}
+$ module load gcc gsl
+$ python setup.py develop
+\end{lstlisting}
+\item Whenever you want to use \texttt{galpy}, you must first reactivate the Python virtual environment in which it is installed and load the \texttt{gsl} module. You can save a combination of modules to streamline this process. Simply load the modules you wish to save and do:
+\begin{lstlisting}
+$ module save MYMODULES
+\end{lstlisting}
+where \texttt{MYMODULES} is the name that you give to the combination of modules. To later reload this combination, do:
+\begin{lstlisting}
+$ module restore MYMODULES
+\end{lstlisting}
+\end{enumerate}
+
+\section{Submitting Jobs}
+Niagara uses the \href{https://docs.scinet.utoronto.ca/index.php/Slurm}{Slurm Workload Manager} for scheduling compute jobs. When requesting compute time on Niagara, you must send all commands through Slurm. This section provides a minimal example of submitting a job using Slurm. More detailed examples, and information about limits for submitting jobs, can be found in the SciNet documentation.
+
+Below is an example of a job submission script \texttt{example\_job.sh} to Slurm.
+
+\begin{lstlisting}[numbers=left]
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=80
+#SBATCH --time=1:00:00
+#SBATCH --job-name=example_job
+#SBATCH --output=example_output.txt
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=email@gmail.com
+
+module restore MYMODULES
+source activate myEnv
+
+cd $SLURM_SUBMIT_DIR
+
+python myJobScript.py
+\end{lstlisting}
+This script does the following:
+\begin{itemize}
+\item The first line indicates that the script is a Bash script.
+\item The lines that begin with \texttt{\#SBATCH} are Slurm parameters.
+\begin{itemize}
+	\item Here, we have requested to run a job on 1 compute node for 1 hour. All jobs are submitted in multiples of nodes, and each node has 40 cores.
+	\item We have also indicated that our node will run 80 tasks or processes in parallel. Here, we are using hyperthreading to split each of the 40 physical cores into 2 logical cores. For certain applications, this can improve efficiency.
+	\item The console output of the program will be saved to \texttt{example\_output.txt} in the same directory as the submission script.
+	\item Finally, we have also requested to receive an email when the job starts, finishes, or fails.
+\end{itemize}
+\item We then restore a combination of modules necessary to run our script, and activate a Python virtual environment.
+\item Finally, we \texttt{cd} to the directory containing the submission script and run a Python script.
+\end{itemize}
+This script can be submitted to Slurm using the \texttt{sbatch} command:
+\begin{lstlisting}
+$ sbatch example_job.sh
+\end{lstlisting}
+You can view the status of your submitted jobs by typing:
+\begin{lstlisting}
+$ squeue -u USERNAME
+\end{lstlisting}
+Once the job makes it through the queue, it will be assigned an entire node which it will have full control over. As such, your jobs should make use of the entire node. Note that you can only write to the \texttt{\$SCRATCH} directory from the compute nodes -- your \texttt{\$HOME} directory is read-only from the compute nodes.
+
+As a general rule of thumb, your jobs will get through the queue faster if you split them up into smaller chunks that can run quickly -- for instance, instead of submitting a single job to run for 24 hours, it might be faster to submit 12 jobs each taking 2 hours.
+
+For further instructions on submitting jobs, including information on debugging, job limits, and automatically resubmitting jobs, see the \href{https://docs.scinet.utoronto.ca/index.php/Niagara_Quickstart}{Niagara Quickstart} page and the \href{https://docs.scinet.utoronto.ca/index.php/FAQ}{SciNet FAQ}.
+\section{Running Orbit Integration Suites}
+Orbit integration with multiprocessing in \texttt{galpy} can be accomplished using the \texttt{Orbits} class (which, as of December 2018, is available in the \href{https://github.com/jobovy/galpy/tree/orbits}{\texttt{orbits}} branch). This class uses the same syntax as the standard \texttt{Orbit} class, but is capable of storing multiple orbits simultaneously and integrating them in parallel. For example, given a list of initial conditions \texttt{init} for multiple orbits, they can be integrated in parallel using 80 cores as follows:
+\begin{lstlisting}[language=python, numbers=left]
+import numpy as np
+from galpy.orbit import Orbits
+from galpy.potential import MWPotential2014
+
+t = np.linspace(0, 1, 100)
+o = Oribts(vxvv=init)
+o.integrate(t, MWPotential2014, numcores=80)
+\end{lstlisting}
+The integrated coordinates of the orbits can then be extracted and saved to a file.
+
+When running very large integration suites on SciNet with millions of orbits, the memory requirements will quickly become unmanageable. As such, the integration must be broken up into batches. You could accomplish this by splitting up your initial conditions into many batches, and integrating each in a separate job submission to Slurm. Alternatively, you could submit larger jobs to Slurm, but only load a portion of the data at any given time. You can write your own tools to do this, or optionally you can use the tool available at \url{https://github.com/mwbub/multiorbit}. This tool accepts the initial conditions and integration parameters, and will automatically split up the data into chunks before integrating. It will then save the results of the integration in a \texttt{.fits} file. It is also capable of restarting the integration in case of an interruption, which can be useful for running integration suites that take longer than the maximum allowed compute time on SciNet. To use the tool as in the above example, do the following:
+\begin{lstlisting}[language=python, numbers=left]
+from multiorbit.integrate import integrate_chunks
+
+filename = '<path-to-dir>/myFile.fits'  # Save the output here
+integrate_chunks(t, MWPotential2014, filename, vxvv=init,
+				 numcores=80, chunk_size=1000000)
+\end{lstlisting}
+This will save only the final time step of the integration. To save every time step, add \texttt{save\_all=True} to the call to \texttt{integrate\_chunks}. Once the integration is complete, the output file can be accessed using any program capable of reading \texttt{.fits} files. For example, using \texttt{astropy}:
+\begin{lstlisting}[language=python, numbers=left]
+from astropy.table import Table
+
+filename = '<path-to-dir>/myFile_0.fits'  # Files are numbered 
+										  # by time step
+Table.read(filename, format='fits')
+\end{lstlisting}
+The data columns can then be accessed using the \texttt{astropy.table.Table} syntax.
+
+\lfoot{\footnotesize This guide was written by Mathew Bub in December 2018.}
+\end{document}
